@@ -12,6 +12,11 @@ screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Asteroid")
 
 
+def quit_game():
+    pygame.quit()
+    sys.exit()
+
+
 def load_image_convert_alpha(filename):
     return pygame.image.load(os.path.join('../resources/images', filename)).convert_alpha()
 
@@ -154,7 +159,7 @@ class Rock(GameObject):
 
 
 class Game(object):
-    PLAYING, DYING, GAME_OVER, STARTING, WELCOME = range(5)
+    PLAYING, DYING, GAME_OVER, STARTING = range(4)
     REFRESH, START, RESTART = range(pygame.USEREVENT, pygame.USEREVENT + 3)
 
     def __init__(self):
@@ -168,19 +173,13 @@ class Game(object):
         self.rocks = None
         self.state = None
         self.counter = 0
-        pygame.mixer.init()
-        pygame.mixer.pre_init(44100, -16, 2, 2048)
-        pygame.init()
-
-        self.width = SCREEN_WIDTH
-        self.height = SCREEN_HEIGHT
 
         self.bg_color = 0, 0, 0
 
         self.die_sound = load_sound('die.wav')
         self.die_sound.set_volume(0.05)
         self.missile_sound = load_sound('fire.wav')
-        self.missile_sound.set_volume(0.05)
+        self.missile_sound.set_volume(0.03)
 
         self.big_font = pygame.font.Font(None, 100)
         self.medium_font = pygame.font.Font(None, 50)
@@ -199,7 +198,7 @@ class Game(object):
         self.fire_time = datetime.datetime.now()
 
     def do_welcome(self):
-        self.state = Game.WELCOME
+        self.state = Game.STARTING
         self.welcome_asteroids = self.big_font.render("Asteroid", True, (255, 215, 0))
         self.welcome_desc = self.medium_font.render(
             "Click anywhere/press Enter", True, (35, 107, 142))
@@ -221,13 +220,12 @@ class Game(object):
         margin = 200
 
         if pos is None:
-            rand_x = random.randint(margin, self.width - margin)
-            rand_y = random.randint(margin, self.height - margin)
+            rand_x = random.randint(margin, SCREEN_WIDTH - margin)
+            rand_y = random.randint(margin, SCREEN_HEIGHT - margin)
 
-            while distance((rand_x, rand_y), self.spaceship.position) < \
-                    self.min_rock_distance:
-                rand_x = random.randint(0, self.width)
-                rand_y = random.randint(0, self.height)
+            while distance((rand_x, rand_y), self.spaceship.position) < self.min_rock_distance:
+                rand_x = random.randint(0, SCREEN_WIDTH)
+                rand_y = random.randint(0, SCREEN_HEIGHT)
 
             temp_rock = Rock((rand_x, rand_y), size)
 
@@ -237,22 +235,21 @@ class Game(object):
         self.rocks.append(temp_rock)
 
     def start(self):
-        self.spaceship = Spaceship((self.width // 2, self.height // 2))
+        self.spaceship = Spaceship((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
         self.missiles = []
 
         self.state = Game.PLAYING
 
     def run(self):
-        running = True
-        while running:
+        while True:
             event = pygame.event.wait()
 
             if event.type == pygame.QUIT:
-                running = False
+                quit_game()
 
             elif event.type == Game.REFRESH:
 
-                if self.state != Game.WELCOME:
+                if self.state != Game.STARTING:
 
                     keys = pygame.key.get_pressed()
 
@@ -260,7 +257,6 @@ class Game(object):
                         new_time = datetime.datetime.now()
                         if new_time - self.fire_time > \
                                 datetime.timedelta(seconds=0.15):
-
                             self.spaceship.fire()
                             self.missile_sound.play()
                             self.fire_time = new_time
@@ -270,10 +266,14 @@ class Game(object):
                         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
                             self.spaceship.angle -= 10
                             self.spaceship.angle %= 360
+                            if self.spaceship.speed > 0:
+                                self.spaceship.speed -= 0.1
 
                         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
                             self.spaceship.angle += 10
                             self.spaceship.angle %= 360
+                            if self.spaceship.speed > 0:
+                                self.spaceship.speed -= 0.1
 
                         if keys[pygame.K_UP] or keys[pygame.K_w]:
                             self.spaceship.is_throttle_on = True
@@ -281,8 +281,6 @@ class Game(object):
                             if self.spaceship.speed < 20:
                                 self.spaceship.speed += 1
                         else:
-                            if self.spaceship.speed > 0:
-                                self.spaceship.speed -= 1
                             self.spaceship.is_throttle_on = False
 
                         if len(self.spaceship.active_missiles) > 0:
@@ -309,15 +307,10 @@ class Game(object):
                 pygame.time.set_timer(Game.RESTART, 0)
                 self.state = Game.STARTING
 
-            elif event.type == pygame.MOUSEBUTTONDOWN \
-                    and (self.state == Game.STARTING or
-                         self.state == Game.WELCOME):
+            elif event.type == pygame.MOUSEBUTTONDOWN and self.state == Game.STARTING:
                 self.do_init()
 
-            elif event.type == pygame.KEYDOWN \
-                    and event.key == pygame.K_RETURN and \
-                    (self.state == Game.STARTING or
-                     self.state == Game.WELCOME):
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN and self.state == Game.STARTING:
                 self.do_init()
 
     def game_over(self):
@@ -386,8 +379,8 @@ class Game(object):
                         self.death_distances[rock.size]:
                     self.die()
 
-                elif distance(rock.position, (self.width / 2, self.height / 2)) > \
-                        math.sqrt((self.width / 2) ** 2 + (self.height / 2) ** 2):
+                elif distance(rock.position, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)) > \
+                        math.sqrt((SCREEN_WIDTH / 2) ** 2 + (SCREEN_HEIGHT / 2) ** 2):
 
                     self.rocks.remove(rock)
                     if len(self.rocks) < 10:
@@ -396,7 +389,7 @@ class Game(object):
     def draw(self):
         screen.fill(self.bg_color)
 
-        if self.state != Game.WELCOME:
+        if self.state != Game.STARTING:
             self.spaceship.draw_on()
 
             if len(self.spaceship.active_missiles) > 0:
@@ -424,12 +417,12 @@ class Game(object):
             scores_text = self.medium_font.render(str(self.score),
                                                   True, (0, 155, 0))
             draw_centered(scores_text, screen,
-                          (self.width - scores_text.get_width(), scores_text.get_height() -
+                          (SCREEN_WIDTH - scores_text.get_width(), scores_text.get_height() -
                            10))
 
             if self.state == Game.GAME_OVER or self.state == Game.STARTING:
                 draw_centered(self.game_over_text, screen,
-                              (self.width // 2, self.height // 2))
+                              (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
 
             for i in range(self.lives):
                 draw_centered(self.lives_image, screen,
@@ -438,16 +431,15 @@ class Game(object):
 
         else:
             draw_centered(self.welcome_asteroids, screen,
-                          (self.width // 2, self.height // 2
+                          (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
                            - self.welcome_asteroids.get_height()))
 
             draw_centered(self.welcome_desc, screen,
-                          (self.width // 2, self.height // 2
+                          (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2
                            + self.welcome_desc.get_height()))
 
         pygame.display.flip()
 
 
 Game().run()
-pygame.quit()
-sys.exit()
+quit_game()
